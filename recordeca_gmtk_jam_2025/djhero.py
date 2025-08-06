@@ -1,6 +1,9 @@
+# stdlib
 import sys
+
+# 3rd party
 from linux_joystick import Joystick
-from pynput.keyboard import Key, Controller
+from pynput.keyboard import Controller, Key
 
 keyboard = Controller()
 js = Joystick(int(sys.argv[1]))
@@ -19,7 +22,3 @@ while True:
 				keyboard.press('j')
 			else:
 				keyboard.release('j')
-
-
-
-

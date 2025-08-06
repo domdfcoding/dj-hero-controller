@@ -1,2 +1,2 @@
-linux-joystick-py
-pynput
+linux-joystick-py>=0.0.4
+pynput>=1.8.1
