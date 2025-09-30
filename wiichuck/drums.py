@@ -1,22 +1,21 @@
-# SPDX-FileCopyrightText: 2021 John Furcean
-
+# SPDX-FileCopyrightText: 2023 David Glaude + 2021 John Furcean (for Guitar original code)
 # SPDX-License-Identifier: MIT
 
 """
-`wiichuck.guitar`
+`wiichuck.drums`
 ================================================================================
 
-CircuitPython driver for Guitar Hero Wii Guitar I2C Accessory Devices
+CircuitPython driver for Nintento WiiMote I2C Accessory Devices
 
 
-* Author(s): John Furcean
+* Author(s): John Furcean and David Glaude
 
 Implementation Notes
 --------------------
 
 **Hardware:**
 
-* `Wiichuck <https://www.adafruit.com/product/342>`_
+* Guitar Hero World Tour (Wii) Drums
 * `Adafruit Wii Nunchuck Breakout Adapter <https://www.adafruit.com/product/4836>`_
 
 **Software and Dependencies:**
@@ -24,6 +23,26 @@ Implementation Notes
 * Adafruit CircuitPython firmware for the supported boards:
   https://github.com/adafruit/circuitpython/releases
 * Adafruit's Bus Device library: https://github.com/adafruit/Adafruit_CircuitPython_BusDevice
+
+** Drums/Bass positions
+
+This code assume you connected the Yellow Cymbal on the left and the Orange Cymbal on the right.
+If this is not the default/standard in game/library, we can adapt the library.
+
+Physical setup assumed:
+Yellow - Orange
+Red - Blue - Green
+Joystick - Minus- Plus
+Bass
+
+**Not implemented yet**
+* "Softness" is how hard or soft you hit the pad. It ranges from 0 = Very hard to 6 = very soft,
+#  with 7 = not hit at all == bits 7+6+5 of byte 3
+* "HHP" is 0 if the velocity data is for the hi-hat pedal (unmarked jack above bass pedal jack),
+#  and 1 otherwise.
+* "Which" (another way to identify the presence or origin of the velocity data?)
+
+See http://wiibrew.org/wiki/Wiimote/Extension_Controllers/Guitar_Hero_World_Tour_(Wii)_Drums
 """
 from collections import namedtuple
 from wiichuck import WiiChuckBase
@@ -32,9 +51,9 @@ __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_Nunchuk.git"
 
 
-class Guitar(WiiChuckBase):
+class Drums(WiiChuckBase):
     """
-    Class which provides interface to Nintendo Wii Classic Controller.
+    Class which provides interface to Nintendo Wii Guitar Hero World Tour (Wii) Drums.
 
     :param i2c: The `busio.I2C` object to use.
     :param address: The I2C address of the device. Default is 0x52.
@@ -46,25 +65,21 @@ class Guitar(WiiChuckBase):
     :type i2c_read_delay: float, optional
     """
 
-    _Values = namedtuple(
-        "Values", ("joystick", "buttons", "strum", "whammy", "touchbar")
-    )
+    _Values = namedtuple("Values", ("joystick", "buttons"))
     _Joystick = namedtuple("Joysticks", ("x", "y"))
     _Buttons = namedtuple(
         "Buttons",
         (
             "orange",
-            "blue",
-            "yellow",
             "red",
+            "yellow",
             "green",
-            "start",
-            "select",
+            "blue",
+            "bass",
             "plus",
             "minus",
         ),
     )
-    _Strum = namedtuple("Strum", ("up", "down"))
 
     def __init__(self, i2c, address=0x52, i2c_read_delay=0.002):
         super().__init__(i2c, address=address, i2c_read_delay=i2c_read_delay)
@@ -76,9 +91,6 @@ class Guitar(WiiChuckBase):
         return self._Values(
             self._joystick(do_read=False),
             self._buttons(do_read=False),
-            self._strum(do_read=False),
-            self._whammy(do_read=False),
-            self._touchbar(do_read=False),
         )
 
     @property
@@ -90,21 +102,6 @@ class Guitar(WiiChuckBase):
     def buttons(self):
         """The current pressed state of all buttons."""
         return self._buttons()
-
-    @property
-    def strum(self):
-        """The current pressed state of strum.up and strum.down."""
-        return self._strum()
-
-    @property
-    def whammy(self):
-        """The current whammy position."""
-        return self._whammy()
-
-    @property
-    def touchbar(self):
-        """The current touchbar position. Only available in the Guitar Hero World Tour Guitars"""
-        return self._touchbar()
 
     def _joystick(self, do_read=True):
         if do_read:
@@ -118,31 +115,12 @@ class Guitar(WiiChuckBase):
         if do_read:
             self._read_data()
         return self._Buttons(
-            not bool(self.buffer[5] & 0x80),  # orange
-            not bool(self.buffer[5] & 0x20),  # blue
-            not bool(self.buffer[5] & 0x8),  # yellow
+            not bool(self.buffer[5] & 0x80),  # orange (right cymbals)
             not bool(self.buffer[5] & 0x40),  # red
+            not bool(self.buffer[5] & 0x20),  # yellow (left cymbals)
             not bool(self.buffer[5] & 0x10),  # green
-            not bool(self.buffer[4] & 0x4),  # start
-            not bool(self.buffer[4] & 0x10),  # select
+            not bool(self.buffer[5] & 0x8),  # blue
+            not bool(self.buffer[5] & 0x4),  # bass
             not bool(self.buffer[4] & 0x4),  # plus
             not bool(self.buffer[4] & 0x10),  # minus
         )
-
-    def _strum(self, do_read=True):
-        if do_read:
-            self._read_data()
-        return self._Strum(
-            not bool(self.buffer[5] & 0x1),  # up
-            not bool(self.buffer[4] & 0x40),  # down
-        )
-
-    def _touchbar(self, do_read=True):
-        if do_read:
-            self._read_data()
-        return self.buffer[2] & 0x1F
-
-    def _whammy(self, do_read=True):
-        if do_read:
-            self._read_data()
-        return self.buffer[3] & 0x1F
