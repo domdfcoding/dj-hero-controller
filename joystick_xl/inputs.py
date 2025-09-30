@@ -12,9 +12,12 @@ except ImportError:
     pass
 
 # These are all CircuitPython built-ins
-from analogio import AnalogIn  # type: ignore
-from digitalio import DigitalInOut, Direction, Pull  # type: ignore
-from microcontroller import Pin  # type: ignore
+try:
+    from analogio import AnalogIn  # type: ignore
+    from digitalio import DigitalInOut, Direction, Pull  # type: ignore
+    from microcontroller import Pin  # type: ignore
+except ImportError:
+    print("*** WARNING: CircuitPython built-in modules could not be imported. ***")
 
 
 class VirtualInput:
@@ -140,7 +143,7 @@ class Axis:
         :return: ``True`` if inverted, ``False`` otherwise
         :rtype: bool
         """
-        return self._invert < 0
+        return self._invert
 
     def __init__(
         self,
@@ -187,10 +190,7 @@ class Axis:
         self._deadband = deadband
         self._min = min
         self._max = max
-        if invert:
-            self._invert = -1
-        else:
-            self._invert = 1
+        self._invert = invert
         self._value = Axis.IDLE
         self._last_source_value = Axis.IDLE
 
@@ -224,16 +224,22 @@ class Axis:
             raise TypeError("Incompatible axis source specified.")
 
     def _update(self) -> int:
-        """Read raw input data and convert it to a joystick-compatible value.
+        """
+        Read raw input data and convert it to a joystick-compatible value.
 
         :return: ``0`` to ``255``, ``128`` if idle/centered.
         :rtype: int
         """
-        if self._source.value == self._last_source_value:
+        source_value = self._source.value
+
+        # short-circuit processing if the source value hasn't changed
+        if source_value == self._last_source_value:
             return self._value
 
+        self._last_source_value = source_value
+
         # clamp raw input value to specified min/max
-        new_value = min(max(self._source.value, self._min), self._max)
+        new_value = min(max(source_value, self._min), self._max)
 
         # account for deadband
         if new_value < (self._raw_midpoint - self._deadband):
@@ -244,7 +250,13 @@ class Axis:
             new_value = self._db_range // 2
 
         # calculate scaled joystick-compatible value and clamp to 0-255
-        self._value = min(new_value * 256 // self._db_range, 255)
+        new_value = min(new_value * 256 // self._db_range, 255)
+
+        # invert the axis if necessary
+        if self._invert:
+            self._value = 255 - new_value
+        else:
+            self._value = new_value
 
         return self._value
 
